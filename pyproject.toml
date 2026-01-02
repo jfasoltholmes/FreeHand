@@ -1,0 +1,11 @@
+[project]
+name = "free-hand"
+version = "0.1.0"
+description = "FreeHand is a real-time OpenCV/Mediapipe–based hand-tracking system that mirrors webcam-detected hand movements to a Raspberry Pi–controlled, motorized 3D-printed hand."
+readme = "README.md"
+requires-python = "==3.12.*"
+dependencies = [
+    "mediapipe>=0.10.21",
+    "numpy>=1.26.4",
+    "opencv-python>=4.11.0.86",
+]
