@@ -3,6 +3,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 import cv2
+import math
 import time, logging
 import numpy as np
 
@@ -86,13 +87,38 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                 frame = cv2.circle(frame, (xloc, yloc), 5, (0, 0, 255), -1)
         """
         if callback_results is not None:
+            # Full hand landmark visualization
+            """
             for landmark_set_idx, landmark_set in enumerate(callback_results):
-                print(f"Index: {landmark_set_idx}, Set: {landmark_set}")
+                #print(f"Index: {landmark_set_idx}, Set: {landmark_set}")
                 xloc, yloc = int(landmark_set[0] * image_width), int(landmark_set[1] * image_height)
                 frame = cv2.circle(frame, (xloc, yloc), 5, (0, 0, 255), -1)
             # Check the differences between index 4, 8, 12, 16, and 20 from index 0(wrist)
             # For loop with step 4
-            # For _, fingertip_set in enumerate(callback_results[0:20:4])
+            """
+            # Fingertip + Wrist landmark visualization (Using Python Distance and normalize)
+            # Possible solution to computer curl angles rather than raw distance but overkill imo
+            # hand_scale = distance(wrist, middle_finger_MCP)
+            # normalized_distance = distance(wrist, fingertip) / hand_scale
+            # Storing gather finger/wrist as [(xloc0,yloc0), (xloc4,yloc4)...(xloc20,yloc20)]
+
+            # Wrist, thumb tip, pointer tip, middle mcp, middle tip, ring tip, pinky tip
+            imp_landmarks = {0, 4, 8, 9, 12, 16, 20}
+            coord_list = []
+
+            for idx, fingertip_set in enumerate(callback_results):
+                xloc, yloc = int(fingertip_set[0] * image_width), int(fingertip_set[1] * image_height)
+                if idx in imp_landmarks:
+                    coord_list.append((xloc, yloc))
+                frame = cv2.circle(frame, (xloc, yloc), 5, (0, 0, 255), -1)
+                
+            hand_scale = math.dist(coord_list[0], coord_list[3])
+            
+            for idx, coord_tuple in enumerate(coord_list):
+                if idx == 0 or idx == 3:
+                    continue
+                normalized_distance = math.dist(coord_list[0], coord_tuple) / hand_scale
+                print(f"idx: {idx}, normalizedDistFromWrist: {normalized_distance}")
 
         # Flip the frame (for aesthetics) and show the frame
         cv2.imshow('Hand Tracking', cv2.flip(frame, 1))
