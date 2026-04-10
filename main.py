@@ -8,38 +8,26 @@ import time, logging
 import numpy as np
 
 last_timestamp = 0
+
+# Contains latest snapshot of detected hand landmarks.
 callback_results = None
 
 def callback(result, output_image, timestamp_ms):
     try:
-        """
-        # This may be causing issues because instead of creating callback_results in one snapshot it is writing incrementally from the for loop.
-        # This causes issues because the callback is running asynchronously which results in the main webcam loop reading partial writes in the callback_results
-        for hand_idx, hand_landmarks in enumerate(result.hand_landmarks):
-            # Add hands to callback snapshot
-            if hand_idx not in callback_results:
-                callback_results[hand_idx] = {}
-
-            for landmark_idx, landmark in enumerate(hand_landmarks):
-                # Add each hands 
-                callback_results[hand_idx][landmark_idx] = {
-                    "landmark_x": landmark.x,
-                    "landmark_y": landmark.y,
-                    "landmark_z": landmark.z
-                } 
-        """
-        # Assumes 1 hand, use a for loop in place of hand assignment if num_hands=2
+        # Pruned incremental callback building due to partial writes asynchronously.
+        # Prototype assumes 1 hand in frame.
         global callback_results
         if not result.hand_landmarks:
             callback_results = None
             return
         hand = result.hand_landmarks[0]
+
+        # Replace entire hand snapshot.
         callback_results = np.array([[lm.x, lm.y, lm.z] for lm in hand], dtype=np.float32)
 
     except Exception as e:
         logging.error(f"Error in callback function: {e}")
 
-# Creating HandLandmarker object for webcam livestream type
 base_options = python.BaseOptions(model_asset_path='hand_landmarker.task')
 running_mode = vision.RunningMode('LIVE_STREAM')
 options = vision.HandLandmarkerOptions(base_options=base_options,
@@ -51,76 +39,54 @@ options = vision.HandLandmarkerOptions(base_options=base_options,
                                         result_callback=callback)
 
 with vision.HandLandmarker.create_from_options(options) as landmarker:
-    # Run webcam video capture
     webcam = cv2.VideoCapture(0)
     while True:
-        start_time = time.time()
-
         _, frame = webcam.read()
         
         image_height, image_width, _ = frame.shape
 
-        # Convert each frame to mediapipe image object
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
 
+        # Ensure timestamps sent to detect_async are strictly increasing.
         timestamp = time.time()
         if timestamp <= last_timestamp:
             continue
-
-        # Detect landmarks in frame through callback function
-        testVariable = landmarker.detect_async(mp_image, mp.Timestamp.from_seconds(timestamp).value)
+        landmarker.detect_async(mp_image, mp.Timestamp.from_seconds(timestamp).value)
         last_timestamp = timestamp
 
-        # Similar to callback, loop through each hand and then 
-        #print(callback_results)
-        # Loop through each hand.
-          # For each hand, loop through and plot each all 21 hand landmarks
-
-        """
-        # Possibly use output image versus using frame to get x, y center pixel points. may improve accuracy if bad
-        for hand_idx, hand in callback_results.items():
-            #print(f"Key: {key},  Value: {value}\n")
-            for landmark_set_idx, landmark_set in hand.items():
-                #print(f"Key: {landmark_set_idx},  Value: {landmark_set}\n")
-                #print(f"Value for X: {landmark_set['landmark_x']}\nValue for Y: {landmark_set['landmark_y']}\n")
-                xloc, yloc = int(landmark_set['landmark_x'] * image_width), int(landmark_set['landmark_y'] * image_height)
-                frame = cv2.circle(frame, (xloc, yloc), 5, (0, 0, 255), -1)
-        """
+        # Visualize landmarks and perform normalized distance calculations.
         if callback_results is not None:
-            # Full hand landmark visualization
-            """
-            for landmark_set_idx, landmark_set in enumerate(callback_results):
-                #print(f"Index: {landmark_set_idx}, Set: {landmark_set}")
-                xloc, yloc = int(landmark_set[0] * image_width), int(landmark_set[1] * image_height)
-                frame = cv2.circle(frame, (xloc, yloc), 5, (0, 0, 255), -1)
-            # Check the differences between index 4, 8, 12, 16, and 20 from index 0(wrist)
-            # For loop with step 4
-            """
-            # Fingertip + Wrist landmark visualization (Using Python Distance and normalize)
-            # Possible solution to computer curl angles rather than raw distance but overkill imo
-            # hand_scale = distance(wrist, middle_finger_MCP)
-            # normalized_distance = distance(wrist, fingertip) / hand_scale
-            # Storing gather finger/wrist as [(xloc0,yloc0), (xloc4,yloc4)...(xloc20,yloc20)]
-
-            # Wrist, thumb tip, pointer tip, middle mcp, middle tip, ring tip, pinky tip
+            # imp_landmark structure:
+            # idx 0:Wrist, 1:thumb tip, 2:index tip, 3:middle mcp, 4:middle tip, 5:ring tip, 6:pinky tip
             imp_landmarks = {0, 4, 8, 9, 12, 16, 20}
             coord_list = []
 
+            # Display all 21 MediaPipe landmarks while storing important landmarks.
             for idx, fingertip_set in enumerate(callback_results):
                 xloc, yloc = int(fingertip_set[0] * image_width), int(fingertip_set[1] * image_height)
                 if idx in imp_landmarks:
-                    coord_list.append((xloc, yloc))
+                    # Store normalized float coordinates, while visualization uses integer pixel coordinates.
+                    coord_list.append((fingertip_set[0], fingertip_set[1]))
                 frame = cv2.circle(frame, (xloc, yloc), 5, (0, 0, 255), -1)
-                
+            
+            # Normalize all finger distances by wrist to middle MCP distance (Relatively stable hand-size reference).
             hand_scale = math.dist(coord_list[0], coord_list[3])
             
+            # idx refers to coord_list idx in this loop, not mediapipe landmark idx.
             for idx, coord_tuple in enumerate(coord_list):
                 if idx == 0 or idx == 3:
                     continue
-                normalized_distance = math.dist(coord_list[0], coord_tuple) / hand_scale
-                print(f"idx: {idx}, normalizedDistFromWrist: {normalized_distance}")
+                
+                if idx == 1:
+                    # Thumb edge case: Calculate normalized distance from middle MCP to thumb tip.
+                    normalized_distance = math.dist(coord_list[3], coord_tuple) / hand_scale
+                else:
+                    # Calculate normalized distance from wrist to each finger tip.
+                    normalized_distance = math.dist(coord_list[0], coord_tuple) / hand_scale
+                
+                print(f"idx: {idx}, normalizedDist: {normalized_distance}")
 
-        # Flip the frame (for aesthetics) and show the frame
+        # Flip the frame (for aesthetics) and display.
         cv2.imshow('Hand Tracking', cv2.flip(frame, 1))
         if cv2.waitKey(1) == ord('q'):
             break
