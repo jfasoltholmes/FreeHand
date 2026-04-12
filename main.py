@@ -4,13 +4,44 @@ from mediapipe.tasks.python import vision
 
 import cv2
 import math
+import serial
 import time, logging
 import numpy as np
+
+# Establish serial connection
+ser = serial.Serial(port='COM4', baudrate=9600)
+time.sleep(2) 
 
 last_timestamp = 0
 
 # Contains latest snapshot of detected hand landmarks.
 callback_results = None
+
+# Mapping with hard coded norm values
+calibration = [
+    {"open_norm": 0.92, "closed_norm": 0.42, "min_angle": 0, "max_angle": 150}, # Thumb
+    {"open_norm": 1.85, "closed_norm": 1.15, "min_angle": 0, "max_angle": 170}, # Index
+    {"open_norm": 1.93, "closed_norm": 1.14, "min_angle": 0, "max_angle": 170}, # Middle
+    {"open_norm": 1.85, "closed_norm": 1.10, "min_angle": 0, "max_angle": 170}, # Ring
+    {"open_norm": 1.55, "closed_norm": 1.05, "min_angle": 0, "max_angle": 170} # Pinky
+]
+
+def map_to_angle(raw_value, calib):
+    open_norm = calib["open_norm"]
+    closed_norm = calib["closed_norm"]
+    min_angle = calib["min_angle"]
+    max_angle = calib["max_angle"]
+
+    # Clamp raw value into expected range.
+    raw_value = max(min(raw_value, open_norm), closed_norm)
+
+    # Convert to 0-1 closed fraction (note inversion)
+    closed_fraction = (open_norm - raw_value) / (open_norm - closed_norm)
+
+    # Map to angle range
+    angle = min_angle + closed_fraction * (max_angle - min_angle)
+
+    return int(angle)
 
 def callback(result, output_image, timestamp_ms):
     try:
@@ -42,9 +73,7 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
     webcam = cv2.VideoCapture(0)
     while True:
         _, frame = webcam.read()
-        
         image_height, image_width, _ = frame.shape
-
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
 
         # Ensure timestamps sent to detect_async are strictly increasing.
@@ -60,6 +89,8 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
             # idx 0:Wrist, 1:thumb tip, 2:index tip, 3:middle mcp, 4:middle tip, 5:ring tip, 6:pinky tip
             imp_landmarks = {0, 4, 8, 9, 12, 16, 20}
             coord_list = []
+            norm_values = []
+            angle_values = []
 
             # Display all 21 MediaPipe landmarks while storing important landmarks.
             for idx, fingertip_set in enumerate(callback_results):
@@ -79,16 +110,23 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                 
                 if idx == 1:
                     # Thumb edge case: Calculate normalized distance from middle MCP to thumb tip.
-                    normalized_distance = math.dist(coord_list[3], coord_tuple) / hand_scale
+                    norm_values.append(math.dist(coord_list[3], coord_tuple) / hand_scale)
                 else:
                     # Calculate normalized distance from wrist to each finger tip.
-                    normalized_distance = math.dist(coord_list[0], coord_tuple) / hand_scale
+                    norm_values.append(math.dist(coord_list[0], coord_tuple) / hand_scale)
                 
-                print(f"idx: {idx}, normalizedDist: {normalized_distance}")
+            # Map to angle values
+            for i in range(5):
+                angle = map_to_angle(norm_values[i], calibration[i])
+                angle_values.append(angle)
+            
+            ser.write((','.join(map(str, angle_values)) + '\n').encode())
 
         # Flip the frame (for aesthetics) and display.
         cv2.imshow('Hand Tracking', cv2.flip(frame, 1))
         if cv2.waitKey(1) == ord('q'):
+            print("Closing Serial Connection")
+            ser.close()
             break
 
     webcam.release()

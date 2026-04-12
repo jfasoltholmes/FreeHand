@@ -10,7 +10,21 @@ Servo midl;
 Servo pntr;
 Servo thmb;
 
-// Initialize each finger position to 0 deg.
+// Initialize min finger position to 0 deg.
+const int PINK_MIN = 0;
+const int RING_MIN = 0;
+const int MIDL_MIN = 0;
+const int PNTR_MIN = 0;
+const int THMB_MIN = 0;
+
+// Initialize max finger position to servo-safe deg.
+const int PINK_MAX = 170;
+const int RING_MAX = 170;
+const int MIDL_MAX = 170;
+const int PNTR_MAX = 170;
+const int THMB_MAX = 150;
+
+// Initialize each finger current position to 0 deg.
 int pink_pos = 0;
 int ring_pos = 0;
 int midl_pos = 0;
@@ -21,11 +35,11 @@ void setup() {
   Serial.begin(9600);
 
   // Attach each servo obj to corresponding analog and digital pins.
-  pink.attach(A0);
-  ring.attach(2);
-  midl.attach(3);
-  pntr.attach(4);
   thmb.attach(5);
+  pntr.attach(4);
+  midl.attach(3);
+  ring.attach(2);
+  pink.attach(A0);
 }
 
 void loop() {
