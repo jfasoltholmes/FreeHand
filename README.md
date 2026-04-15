@@ -1,7 +1,7 @@
 # FreeHand 🤖✋
 
 <p align="center">
-  <img src="images/demo.gif" width="500"/>
+  <img src="images/demo-hand.gif" width="500"/>
 </p>
 
 <p align="center">
