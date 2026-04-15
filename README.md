@@ -1,7 +1,7 @@
 # FreeHand 🤖✋
 
 <p align="center">
-  <img src="images/setup-overview.jpeg" width="500"/>
+  <img src="images/demo.gif" width="500"/>
 </p>
 
 <p align="center">
@@ -28,13 +28,13 @@ uv sync
 uv run python main.py
 ```
 
-⚠️ This demo does **not** control the robotic hand yet.
+⚠️ This runs the computer vision pipeline only (hand tracking + landmark visualization).
 
 See [Hardware Setup](#hardware--assembly-notes) for full system integration.
 
 ## Why FreeHand?
 
-FreeHand explores real-time human-to-robot motion mapping using accessible tools.
+FreeHand demonstrates real-time human-to-robot motion mapping using accessible tools.
 The goal is to bridge computer vision and physical interaction in a simple and reproducible system.
 
 ## 🧠 FreeHand Overview
@@ -68,12 +68,16 @@ This system combines:
  - Real-time hand tracking via webcam
  - MediaPipe landmark detection
  - Finger state extraction using normalized distance
- - Thumb-specific control model (middle MCP reference)
- - Servo-safe motion range calibration (0-150°)
-
-### In Progress
+ - Per-finger calibration mapping (open/closed → servo angle)
  - Serial communication (Python → Bluno Beetle)
- - Real-time servo actuation
+ - Real-time servo actuation (full hand control)
+ - Thumb-specific control model (middle MCP reference)
+ - Servo-safe motion range calibration
+
+### Current Capabilities
+ - Full real-time mapping from human hand → robotic hand
+ - Per-finger independent control
+ - Stable demo-ready motion with calibration tuning
 
 ## 🛠 Setup (Software + Hardware)
 ### Software Prerequisites
@@ -168,12 +172,12 @@ Required to modify or flash the microcontroller:
     - Positive → A rail
     - Ground → B rail
 
-## 🔄 System Behavior (Current Firmware) 
-- After flashing the firmware and powering the system, each servo will: 
-    - Move to 150° (closed position)
-    - Return to 0° (open position)
-    - Repeat continuously.
-- This serves as a hardware validation loop until vision control is integrated.
+## 🔄 System Behavior
+- The system tracks hand motion via webcam in real-time
+- Finger positions are mapped to normalized distances
+- Distances are converted to calibrated servo angles per finger
+- Angle values are streamed via serial to the Bluno Beetle
+- The robotic hand mirrors the user's hand motion continuously
 
 ## 🖼 Visual References
 
@@ -216,7 +220,7 @@ FreeHand/
 ├── handfiles/             # 3D printable hand components
 ├── images/                # README visuals and setup references
 │
-├── main.py                # Hand tracking entry point
+├── main.py                # Vision + serial control pipeline
 ├── hand_landmarker.task   # MediaPipe model
 │
 ├── pyproject.toml         # Python dependencies

@@ -74,7 +74,7 @@ void loop() {
   }
 }
 
-// Angle parser: "thumb,index,middle,ring,pinky"
+// Angle parser: "thumb,pointer,middle,ring,pinky"
 bool parseAngles(const String& line, int output[5]) {
   int first = line.indexOf(',');
   int second = line.indexOf(',', first + 1);

@@ -9,7 +9,7 @@ import time, logging
 import numpy as np
 
 # Establish serial connection
-ser = serial.Serial(port='COM4', baudrate=9600)
+serial_conn = serial.Serial(port='COM4', baudrate=9600)
 time.sleep(2) 
 
 last_timestamp = 0
@@ -19,18 +19,18 @@ callback_results = None
 
 # Mapping with hard coded norm values
 calibration = [
-    {"open_norm": 0.92, "closed_norm": 0.42, "min_angle": 0, "max_angle": 150}, # Thumb
+    {"open_norm": 0.97, "closed_norm": 0.38, "min_angle": 0, "max_angle": 150}, # Thumb
     {"open_norm": 1.85, "closed_norm": 1.15, "min_angle": 0, "max_angle": 170}, # Index
     {"open_norm": 1.93, "closed_norm": 1.14, "min_angle": 0, "max_angle": 170}, # Middle
     {"open_norm": 1.85, "closed_norm": 1.10, "min_angle": 0, "max_angle": 170}, # Ring
-    {"open_norm": 1.55, "closed_norm": 1.05, "min_angle": 0, "max_angle": 170} # Pinky
+    {"open_norm": 1.82, "closed_norm": 0.62, "min_angle": 0, "max_angle": 170}  # Pinky
 ]
 
-def map_to_angle(raw_value, calib):
-    open_norm = calib["open_norm"]
-    closed_norm = calib["closed_norm"]
-    min_angle = calib["min_angle"]
-    max_angle = calib["max_angle"]
+def map_to_angle(raw_value, finger_calibration):
+    open_norm = finger_calibration["open_norm"]
+    closed_norm = finger_calibration["closed_norm"]
+    min_angle = finger_calibration["min_angle"]
+    max_angle = finger_calibration["max_angle"]
 
     # Clamp raw value into expected range.
     raw_value = max(min(raw_value, open_norm), closed_norm)
@@ -45,7 +45,6 @@ def map_to_angle(raw_value, calib):
 
 def callback(result, output_image, timestamp_ms):
     try:
-        # Pruned incremental callback building due to partial writes asynchronously.
         # Prototype assumes 1 hand in frame.
         global callback_results
         if not result.hand_landmarks:
@@ -119,14 +118,14 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
             for i in range(5):
                 angle = map_to_angle(norm_values[i], calibration[i])
                 angle_values.append(angle)
-            
-            ser.write((','.join(map(str, angle_values)) + '\n').encode())
 
-        # Flip the frame (for aesthetics) and display.
+            serial_conn.write((','.join(map(str, angle_values)) + '\n').encode())
+
+        # Flip frame horizontally for a mirrored webcam view.
         cv2.imshow('Hand Tracking', cv2.flip(frame, 1))
         if cv2.waitKey(1) == ord('q'):
             print("Closing Serial Connection")
-            ser.close()
+            serial_conn.close()
             break
 
     webcam.release()
